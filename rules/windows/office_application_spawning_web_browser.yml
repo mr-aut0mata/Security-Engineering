@@ -1,0 +1,30 @@
+title: Office Application Spawning Web Browser
+id: 2b3c4d5e-6789-01cd-ef12-3456789012cd
+status: stable
+description: Detects an Office application (Outlook, Word) spawning a web browser process. This behavior is typical when a user clicks a malicious link inside an encrypted RPMSG or document.
+author: Alex Dumas
+date: 2025-12-02
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection_parent:
+        ParentImage|endswith:
+            - '\outlook.exe'
+            - '\winword.exe'
+            - '\excel.exe'
+            - '\powerpnt.exe'
+    selection_child:
+        Image|endswith:
+            - '\chrome.exe'
+            - '\msedge.exe'
+            - '\firefox.exe'
+            - '\iexplore.exe'
+            - '\brave.exe'
+            - '\opera.exe'
+    condition: selection_parent and selection_child
+level: high
+tags:
+    - attack.execution
+    - attack.t1204.002
+    - attack.t1566
