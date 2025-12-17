@@ -1,0 +1,9 @@
+// Detect known EDR executables running from suspicious user locations
+let EDRProcesses = dynamic(["SentinelAgentWorker.exe", "SentinelAgent.exe", "MsSense.exe", "WindowsSensor.exe", "AgentBeat.exe", "Cybereason.exe", "CortexXDR.exe", "TaniumClient.exe"]);
+DeviceProcessEvents
+| where FileName in~ (EDRProcesses)
+| where FolderPath has_any ("AppData", "Temp", "Public", "ProgramData", "Users")
+| where not(FolderPath has "Program Files")
+// Exclusion for genuine updates if they run temporarily from specific secure folders (tune as needed)
+| project Timestamp, AccountName, DeviceName, FileName, FolderPath, ProcessCommandLine, InitiatingProcessFileName
+| sort by Timestamp desc
