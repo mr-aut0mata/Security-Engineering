@@ -1,2 +1,2 @@
 # detections
-Curated list of Sigma, Yara, Suricata and custom detection rules across query landuages.
+Curated list of Blue Team detection rules.
