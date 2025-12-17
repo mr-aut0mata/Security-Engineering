@@ -1,0 +1,14 @@
+let MalwarePayloads = dynamic([
+    /// WRAP YOUR COMMANDS IN TRIPLE BACKTICKS (```)
+    /// This allows you to paste quotes " and ' without breaking the query.
+    
+    ```powershell.exe -Command "Write-Host 'This would normally break syntax'"```, 
+    ```vssadmin.exe delete shadows /all /quiet```,
+    ```Example with \backslashes\ and "quotes" mixed```
+
+]);
+DeviceProcessEvents
+| where FileName in~ ("powershell.exe", "cmd.exe", "pwsh.exe")
+/// The logic remains the same
+| where ProcessCommandLine has_any (MalwarePayloads)
+ or where InitiatingProcessCommandLine has_any (MalwarePayloads)
