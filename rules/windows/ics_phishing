@@ -1,0 +1,21 @@
+title: Suspicious Child Process from Outlook (ICS Phishing)
+id: 9a2b3c4d-5e6f-7g8h-9i0j-1k2l3m4n5o6p
+description: Detects Outlook spawning suspicious interpreters or browsers, indicative of a user clicking a link in a malicious calendar invite.
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    ParentImage|endswith: '\outlook.exe'
+  suspicious_children:
+    Image|endswith:
+      - '\powershell.exe'
+      - '\cmd.exe'
+      - '\wscript.exe'
+      - '\cscript.exe'
+      - '\curl.exe'
+  condition: selection and suspicious_children
+level: high
+tags:
+  - attack.initial_access
+  - attack.t1566.001
