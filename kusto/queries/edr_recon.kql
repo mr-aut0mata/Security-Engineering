@@ -1,0 +1,12 @@
+// Detect EDR processes spawning recon tools like reg.exe or findstr.exe
+let EDRProcesses = dynamic(["SentinelAgentWorker.exe", "MsSense.exe", "WindowsSensor.exe", "SentinelAgent.exe"]); // Add other EDR binaries if targeted
+let SuspiciousChildren = dynamic(["reg.exe", "findstr.exe", "cmd.exe", "powershell.exe", "net.exe", "whoami.exe"]);
+DeviceProcessEvents
+| where InitiatingProcessFileName in~ (EDRProcesses)
+| where FileName in~ (SuspiciousChildren)
+/// benign user exclusions
+| where AccountName != "system"
+// Specific behavior observed in Storm-0249: querying MachineGuid
+| extend IsMachineGuidQuery = ProcessCommandLine has "MachineGuid"
+| summarize count() by DeviceName, AccountName, InitiatingProcessFileName, FileName, ProcessCommandLine, IsMachineGuidQuery
+| where IsMachineGuidQuery == true or count_ < 5 // Alert on rare child processes or specific MachineGuid theft
