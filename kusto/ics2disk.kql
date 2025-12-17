@@ -1,0 +1,7 @@
+/// this is a WIP
+DeviceFileEvents
+| where FileName endswith ".ics"
+| where ActionType == "FileCreated"
+// Look for files created in Temp or Outlook Temp folders which might indicate auto-processing (needs tweaking)
+| where FolderPath has_any ("Temp", "InetCache")
+| project Timestamp, DeviceName, FileName, FolderPath, InitiatingProcessFileName
