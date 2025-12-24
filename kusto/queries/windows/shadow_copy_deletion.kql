@@ -1,0 +1,5 @@
+DeviceProcessEvents
+| where (FileName =~ "vssadmin.exe" and ProcessCommandLine has_all ("delete", "shadows"))
+     or (FileName =~ "wmic.exe" and ProcessCommandLine has_all ("shadowcopy", "delete"))
+     or (FileName =~ "powershell.exe" and ProcessCommandLine has "Remove-WmiObject" and ProcessCommandLine has "Win32_ShadowCopy")
+| project Timestamp, DeviceId, DeviceName, ReportId, AccountName, FileName, ProcessCommandLine, InitiatingProcessParentFileName
