@@ -1,4 +1,4 @@
 DeviceProcessEvents
-| where InitiatingProcessFileName in~ ("vim.exe", "vi", "vim", "nano")
-| where FileName in~ ("sh", "bash", "dash", "zsh")
-| project Timestamp, DeviceName, FileName, ProcessCommandLine, InitiatingProcessCommandLine
+| where InitiatingProcessFileName in~ ("vim", "vi", "vim.basic", "vim.tiny", "nano", "emacs")
+| where FileName in~ ("sh", "bash", "dash", "zsh", "ksh")
+| project Timestamp, DeviceId, DeviceName, ReportId, AccountName, FileName, ProcessCommandLine, InitiatingProcessFileName, InitiatingProcessCommandLine
