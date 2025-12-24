@@ -1,3 +1,4 @@
 DeviceProcessEvents
 | where FileName in~ ("python", "python3", "perl", "ruby")
-| where ProcessCommandLine has_all ("-c", "import", "pty", "spawn") or ProcessCommandLine has_all ("-e", "exec", "socket")
+| where ProcessCommandLine has_all ("pty", "spawn") or ProcessCommandLine has_all ("exec", "socket")
+| project Timestamp, DeviceId, DeviceName, ReportId, AccountName, FileName, ProcessCommandLine, InitiatingProcessFileName
