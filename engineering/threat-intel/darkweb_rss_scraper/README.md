@@ -23,15 +23,17 @@ For maximum OPSEC, run this on a dedicated Virtual Machine (VM). Ensure you do n
 
 ### Common RSS Feed URL Patterns
 
-Here is the formatted table. You can copy and paste this directly into your README.md under a "Supported Patterns" or "Discovery" section.
-Common Forum RSS Patterns
-If you find a new onion site but aren't sure where the feed is located, try appending these common suffixes to the base URL:
-Software	RSS URL Pattern	Notes
-XenForo	/forums/-/index.rss	Used by XSS.is, Dread, and most modern dark web forums.
-vBulletin	/external.php?type=RSS2	Common on older, high-profile Russian forums like Exploit.in.
-MyBB	/syndication.php?limit=20	The default for BreachForums and many of its clones/variants.
-Invision (IPB)	/index.php?app=core&module=global&section=rss	Found on several private data leak and "VIP" sites.
-WordPress	/feed/ or /?feed=rss2	Standard for ransomware "wall of shame" blogs and news sites.
-Simple Machines	/?type=rss;action=.xml	Used by some smaller, niche technical hacking communities.
-How to use these
-If a site is located at http://example777.onion, try accessing http://example777.onion/syndication.php in the Tor Browser first. If you see an XML page (text that looks like code), that is the URL you should add to the TARGET_FEEDS list in the script
+### Common RSS URL Patterns
+
+When adding new `.onion` sites to the monitor, use these common path suffixes based on the forum software being used:
+
+| Forum Software | RSS Path Pattern | Typical Use Case |
+| :--- | :--- | :--- |
+| **XenForo** | `/forums/-/index.rss` | XSS, Dread, and modern hacking forums |
+| **vBulletin** | `/external.php?type=RSS2` | Exploit.in and older Russian-language boards |
+| **MyBB** | `/syndication.php?limit=20` | BreachForums and MyBB-based clones |
+| **Invision (IPB)** | `/index.php?app=core&module=global&section=rss` | Private data leak sites and VIP boards |
+| **WordPress** | `/feed/` | Ransomware "Wall of Shame" blogs |
+| **Simple Machines** | `/?type=rss;action=.xml` | Niche technical communities |
+
+**Tip:** If you aren't sure which software a site uses, try appending these paths to the base `.onion` URL in your Tor browser to see which one returns an XML feed.
