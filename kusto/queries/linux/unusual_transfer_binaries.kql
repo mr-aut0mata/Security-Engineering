@@ -1,0 +1,4 @@
+DeviceProcessEvents
+| where FileName in~ ("aria2c", "ab", "socat", "whois")
+| where ProcessCommandLine has "http"
+| project Timestamp, DeviceId, DeviceName, ReportId, AccountName, FileName, ProcessCommandLine, InitiatingProcessFileName
