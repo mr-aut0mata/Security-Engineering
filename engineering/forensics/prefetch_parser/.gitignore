@@ -1,0 +1,9 @@
+#### .gitignore
+```text
+# Exclude prefetch dumps
+*.pf
+# Reports
+prefetch_report.json
+# Python artifacts
+__pycache__/
+venv/
