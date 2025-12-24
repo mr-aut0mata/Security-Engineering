@@ -1,0 +1,4 @@
+DeviceProcessEvents
+| where InitiatingProcessFileName in~ ("vim.exe", "vi", "vim", "nano")
+| where FileName in~ ("sh", "bash", "dash", "zsh")
+| project Timestamp, DeviceName, FileName, ProcessCommandLine, InitiatingProcessCommandLine
