@@ -1,0 +1,4 @@
+DeviceProcessEvents
+| where FileName =~ "netsh.exe"
+| where ProcessCommandLine has_all ("interface", "portproxy", "add", "v4tov4")
+| project Timestamp, DeviceId, DeviceName, ReportId, AccountName, ProcessCommandLine, InitiatingProcessFileName
