@@ -1,0 +1,4 @@
+DeviceProcessEvents
+| where FileName =~ "bitsadmin.exe"
+| where ProcessCommandLine has_all ("/transfer", "http")
+| project Timestamp, DeviceId, DeviceName, ReportId, AccountName, ProcessCommandLine, InitiatingProcessFileName
