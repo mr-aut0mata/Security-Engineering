@@ -7,11 +7,11 @@ import os
 # Tor Proxy Settings (9050 for Service, 9150 for Tor Browser)
 TOR_PROXY = "socks5h://127.0.0.1:9050" 
 
-# Keywords to monitor (use brand names, internal project names, or unique IDs)
+# Keywords to monitor (use your own custom brand names, internal project names, or unique IDs)
 KEYWORDS = ["MyCompanyName", "mycompany.com", "ProjectAlpha_Leak"]
 
 # RSS Feed URL Patterns for common forum software
-# Replace 'domain.onion' with real active onion links
+# Replace 'domain.onion' with active onion links
 TARGET_FEEDS = [
     "http://breach-forums.onion/syndication.php?limit=20", # MyBB Pattern
     "http://exploit_in.onion/external.php?type=RSS2",      # vBulletin Pattern
