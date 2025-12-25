@@ -1,0 +1,4 @@
+DeviceProcessEvents
+| where FileName =~ "awk"
+| where ProcessCommandLine has "system" and ProcessCommandLine has_any ("sh", "bash", "dash")
+| project Timestamp, DeviceId, DeviceName, ReportId, AccountName, FileName, ProcessCommandLine, InitiatingProcessParentFileName

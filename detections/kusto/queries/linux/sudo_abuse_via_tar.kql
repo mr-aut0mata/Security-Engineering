@@ -1,0 +1,4 @@
+DeviceProcessEvents
+| where FileName =~ "tar"
+| where ProcessCommandLine has "--checkpoint" and ProcessCommandLine has "exec"
+| project Timestamp, DeviceId, DeviceName, ReportId, AccountName, FileName, ProcessCommandLine, InitiatingProcessCommandLine

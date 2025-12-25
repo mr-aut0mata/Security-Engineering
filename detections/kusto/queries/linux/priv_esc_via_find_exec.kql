@@ -1,0 +1,4 @@
+DeviceProcessEvents
+| where FileName =~ "find"
+| where ProcessCommandLine has "-exec" and ProcessCommandLine has_any ("sh", "bash", "dash", "zsh")
+| project Timestamp, DeviceId, DeviceName, ReportId, AccountName, FileName, ProcessCommandLine, InitiatingProcessTokenElevation
