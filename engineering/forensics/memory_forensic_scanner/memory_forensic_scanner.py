@@ -1,124 +1,218 @@
+#!/usr/bin/env python3
+"""
+Memory Artifact Scanner - v2.0
+Configured for large File Support (mmap)
+"""
+
 import math
 import re
 import os
 import sys
+import mmap
+import struct
+import collections
+from datetime import datetime
+from typing import Dict, List, Union
 
 # --- CONFIGURATION ---
-# Change this to the path of your .raw or .mem dump file.
-# If left as None, the script will run a simulation with mock data.
+# Path to your .raw, .mem, or .dmp file.
+# If None, the script runs the simulation.
 TARGET_FILE = None 
 
-# Thresholds
-ENTROPY_THRESHOLD = 7.2  # Values near 8.0 usually indicate encryption/packing
-NOP_SLED_MIN_SIZE = 16   # Minimum number of 0x90 bytes to trigger an alert
-BLOCK_SIZE = 1024        # Size of memory chunks for entropy calculation
+# Tuned Thresholds
+# Real encryption/compression is often > 7.5. 7.2 captures too much code.
+ENTROPY_THRESHOLD = 7.5       
+# Increased NOP sled size to avoid coincidental 0x90 matches in binary data
+NOP_SLED_MIN_SIZE = 32        
+# Process in 4KB pages (matches standard memory page size)
+BLOCK_SIZE = 4096             
 
-def calculate_entropy(data):
-    """
-    Calculates Shannon entropy. 
-    Returns a value between 0 (predictable) and 8 (completely random).
-    Used to detect encrypted payloads or packed malware.
-    """
-    if not data:
-        return 0
-    entropy = 0
-    for x in range(256):
-        p_x = float(data.count(x)) / len(data)
-        if p_x > 0:
-            entropy += - p_x * math.log(p_x, 2)
-    return entropy
+class MemoryScanner:
+    def __init__(self):
+        self.findings = {
+            "pe_headers": [],
+            "high_entropy_blocks": [],
+            "suspicious_strings": [],
+            "nop_sleds": []
+        }
+        
+        # Pre-compile regex for performance
+        # Global string targets
+        self.str_patterns = {
+            b"powershell": re.compile(b"powershell", re.IGNORECASE),
+            b"cmd.exe": re.compile(b"cmd\.exe", re.IGNORECASE),
+            b"kernel32.dll": re.compile(b"kernel32\.dll", re.IGNORECASE),
+            b"WScript.Shell": re.compile(b"WScript\.Shell", re.IGNORECASE),
+            b"http_proto": re.compile(b"https?://"),
+            b"mimikatz": re.compile(b"mimikatz", re.IGNORECASE)
+        }
+        
+        # NOP Sled: Sequence of 0x90
+        self.nop_regex = re.compile(b'\x90{' + str(NOP_SLED_MIN_SIZE).encode() + b',}')
 
-def scan_memory(dump_bytes):
-    """
-    Scans a byte array for forensic artifacts.
-    """
-    findings = {
-        "pe_headers": [],
-        "high_entropy_blocks": [],
-        "suspicious_strings": [],
-        "nop_sleds": []
-    }
+    @staticmethod
+    def calculate_entropy(data: bytes) -> float:
+        """
+        Calculates Shannon entropy using collections.Counter for O(N) performance.
+        Previous version was O(256 * N), which is too slow for GB-sized files.
+        """
+        if not data: return 0.0
+        
+        length = len(data)
+        counts = collections.Counter(data)
+        entropy = 0.0
+        
+        # Math Optimization:
+        # H(x) = -sum(p * log2(p))
+        # log2(count/len) = log2(count) - log2(len)
+        log_len = math.log2(length)
+        
+        for count in counts.values():
+            p = count / length
+            entropy -= p * (math.log2(count) - log_len)
+            
+        return entropy
 
-    # 1. PE Header Search (MZ signatures)
-    # Identifies executables or DLLs mapped in the dump.
-    for match in re.finditer(b'MZ', dump_bytes):
-        findings["pe_headers"].append(hex(match.start()))
+    @staticmethod
+    def is_valid_pe(data: bytes, offset: int, limit: int) -> bool:
+        """
+        Validates a PE header by checking the e_lfanew pointer.
+        Prevents false positives from random 'MZ' bytes.
+        """
+        try:
+            # We need at least 64 bytes to find e_lfanew
+            if limit - offset < 0x40: return False
+            
+            # Read e_lfanew (pointer to PE signature) at offset 0x3C
+            # unpack_from requires a buffer, so we slice relative to the view
+            # Note: In mmap, slicing returns bytes, which is safe for unpack
+            e_lfanew = struct.unpack('<I', data[offset + 0x3C : offset + 0x40])[0]
+            
+            # Sanity check: PE header shouldn't be miles away (usually < 1KB)
+            if e_lfanew > 1024: return False
+            
+            # Check for 'PE\0\0' signature
+            sig_offset = offset + e_lfanew
+            if limit - sig_offset < 4: return False
+            
+            if data[sig_offset : sig_offset + 4] == b'PE\x00\x00':
+                return True
+                
+        except Exception:
+            pass
+        return False
 
-    # 2. Suspicious String Search
-    # Targets common tools used in fileless attacks or post-exploitation.
-    targets = [
-        b"powershell", b"cmd.exe", b"kernel32.dll", 
-        b"WScript.Shell", b"http://", b"https://"
-    ]
-    for target in targets:
-        for match in re.finditer(target, dump_bytes, re.IGNORECASE):
-            findings["suspicious_strings"].append(
-                f"'{target.decode()}' at {hex(match.start())}"
+    def scan_stream(self, data, data_len: int):
+        print(f"[*] Scanning {data_len / (1024*1024):.2f} MB of data...")
+        start_time = datetime.now()
+
+        # 1. Regex Scanning (Strings & NOPs)
+        # Using regex on mmap is efficient (internal C implementation)
+        print("[*] Phase 1: Artifact Scanning...")
+        for name, pattern in self.str_patterns.items():
+            for match in pattern.finditer(data):
+                self.findings["suspicious_strings"].append(
+                    f"{name.decode()} at {hex(match.start())}"
+                )
+        
+        for match in self.nop_regex.finditer(data):
+            self.findings["nop_sleds"].append(
+                f"Size {len(match.group())} at {hex(match.start())}"
             )
 
-    # 3. NOP Sled Search
-    # Identifies potential shellcode or exploit padding.
-    pattern = b'\x90{' + str(NOP_SLED_MIN_SIZE).encode() + b',}'
-    for match in re.finditer(pattern, dump_bytes):
-        findings["nop_sleds"].append(
-            f"Size {len(match.group())} at {hex(match.start())}"
-        )
+        # 2. Block Scanning (Entropy & PE Headers)
+        # We iterate by blocks to handle entropy. PE headers are checked heuristically.
+        print("[*] Phase 2: Block Analysis (Entropy & PE Structures)...")
+        
+        for i in range(0, data_len, BLOCK_SIZE):
+            chunk = data[i : i + BLOCK_SIZE]
+            
+            # A. Entropy
+            entropy = self.calculate_entropy(chunk)
+            if entropy > ENTROPY_THRESHOLD:
+                self.findings["high_entropy_blocks"].append({
+                    "offset": hex(i),
+                    "entropy": round(entropy, 2)
+                })
 
-    # 4. Entropy Analysis
-    # Scans for blocks that are likely encrypted or compressed.
-    for i in range(0, len(dump_bytes), BLOCK_SIZE):
-        block = dump_bytes[i:i+BLOCK_SIZE]
-        entropy = calculate_entropy(block)
-        if entropy > ENTROPY_THRESHOLD:
-            findings["high_entropy_blocks"].append({
-                "offset": hex(i),
-                "entropy": round(entropy, 2)
-            })
+            # B. PE Headers
+            # We search for 'MZ' in the chunk, then validate
+            mz_loc = chunk.find(b'MZ')
+            while mz_loc != -1:
+                abs_offset = i + mz_loc
+                # Only check if it's a valid PE to avoid noise
+                if self.is_valid_pe(data, abs_offset, data_len):
+                    self.findings["pe_headers"].append(hex(abs_offset))
+                
+                # Find next MZ in this chunk
+                mz_loc = chunk.find(b'MZ', mz_loc + 1)
 
-    return findings
+        duration = datetime.now() - start_time
+        print(f"[*] Scan complete in {duration}")
+        return self.findings
 
-def run_simulation():
-    """
-    Generates a fake memory dump to demonstrate detection capabilities.
-    """
-    print("Running simulation with mock data...\n")
-    mock_mem = bytearray(b'\x00' * 10240)
+def run_simulation_mock():
+    print("[*] Generating Simulation Data (2MB)...")
+    mock = bytearray(b'\x00' * (1024 * 1024 * 2))
     
-    # Inject artifacts
-    mock_mem[0x200:0x202] = b'MZ'              # Executable header
-    mock_mem[0x600:0x620] = b'\x90' * 32        # NOP sled
-    mock_mem[0x1000:0x100b] = b'powershell'    # Malicious string
-    mock_mem[0x2000:0x2400] = os.urandom(1024) # High entropy block
+    # Inject Valid PE (Not just 'MZ')
+    base = 0x200
+    mock[base:base+2] = b'MZ'
+    struct.pack_into('<I', mock, base + 0x3C, 64) # e_lfanew = 64
+    mock[base+64:base+68] = b'PE\x00\x00'       # Valid Signature
     
-    return mock_mem
+    # Inject NOP Sled
+    mock[0x600:0x640] = b'\x90' * 64
+    
+    # Inject Strings
+    mock[0x1000:0x100b] = b'powershell'
+    mock[0x1020:0x1027] = b'cmd.exe'
+    
+    # Inject High Entropy (Encryption)
+    mock[0x2000:0x3000] = os.urandom(4096)
+    
+    return mock
 
 def main():
+    scanner = MemoryScanner()
+    
     if TARGET_FILE and os.path.exists(TARGET_FILE):
-        print(f"Opening {TARGET_FILE}...")
         try:
             with open(TARGET_FILE, "rb") as f:
-                data = f.read()
+                # MMAP: Map file into memory without loading it all at once
+                # access=mmap.ACCESS_READ is readonly
+                with mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
+                    results = scanner.scan_stream(mm, len(mm))
+                    print_results(results)
         except Exception as e:
-            print(f"Error reading file: {e}")
+            print(f"[!] Critical Error: {e}")
             sys.exit(1)
     else:
-        data = run_simulation()
+        # Run a mock execution
+        mock_data = run_simulation_mock()
+        results = scanner.scan_stream(mock_data, len(mock_data))
+        print_results(results)
 
-    results = scan_memory(data)
-
-    # Output Results
+def print_results(results):
+    print("\n" + "="*40)
+    print("       FORENSIC SCAN REPORT")
+    print("="*40)
+    
     for category, items in results.items():
-        header = category.replace('_', ' ').upper()
-        print(f"[{header}]")
+        print(f"\n[+] {category.replace('_', ' ').upper()} ({len(items)})")
         if not items:
-            print("  - No artifacts detected.")
-        else:
-            for item in items:
-                if isinstance(item, dict):
-                    print(f"  - Offset {item['offset']} | Entropy: {item['entropy']}")
-                else:
-                    print(f"  - {item}")
-        print("-" * 40)
+            print("    No artifacts detected.")
+            continue
+            
+        # Truncated output
+        for item in items[:15]:
+            if isinstance(item, dict):
+                print(f"    Offset: {item['offset']} | Entropy: {item['entropy']}")
+            else:
+                print(f"    {item}")
+        
+        if len(items) > 15:
+            print(f"    ... {len(items) - 15} more items ...")
 
 if __name__ == "__main__":
     main()
